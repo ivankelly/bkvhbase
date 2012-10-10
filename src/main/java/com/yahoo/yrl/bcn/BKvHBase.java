@@ -17,10 +17,6 @@ import org.apache.hadoop.hbase.regionserver.HRegionAdaptor;
 public class BKvHBase {
     static Logger LOG = LoggerFactory.getLogger(BKvHBase.class);
 
-    
-    private void runBench(int rate, int seconds, HRegionAdaptor adaptor) throws Exception {
-        
-    }
 
     private static void printHelp(Options options) {
         HelpFormatter formatter = new HelpFormatter();
@@ -32,6 +28,9 @@ public class BKvHBase {
         options.addOption("hregion", false, "Benchmark hbase region storage");
         options.addOption("time", true, "Time to run for, in seconds, default 60");
         options.addOption("rate", true, "Rate at which to write requests, default 1000");
+        options.addOption("size", true, "Size of packets to use");
+        options.addOption("shards", true, "Number of shards to write to");
+        options.addOption("directory", true, "Directory to write to");
 
         CommandLineParser parser = new PosixParser();
         CommandLine cmd = parser.parse(options, args);
@@ -41,9 +40,14 @@ public class BKvHBase {
             System.exit(-1);
         }
 
+        int shards = 1;
+        if (cmd.hasOption("shards")) {
+            shards = Integer.valueOf(cmd.getOptionValue("shards"));
+        }
+
         Adaptor adaptor = null;
-        if (cmd.hasOption("hregion")) {
-            adaptor = new HRegionAdaptor(new File("/tmp/testhbase"), 1);
+        if (cmd.hasOption("hregion") && cmd.hasOption("directory")) {
+            adaptor = new HRegionAdaptor(new File(cmd.getOptionValue("directory")), shards);
         } else {
             printHelp(options);
             System.exit(-1);
@@ -55,6 +59,9 @@ public class BKvHBase {
         }
         if (cmd.hasOption("rate")) {
             b.setRate(Integer.valueOf(cmd.getOptionValue("rate")));
+        }
+        if (cmd.hasOption("size")) {
+            b.setData(new byte[Integer.valueOf(cmd.getOptionValue("size"))]);
         }
 
         b.run();
