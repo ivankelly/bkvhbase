@@ -36,7 +36,15 @@ class Bencher {
 
     Bencher(Adaptor a) {
         adaptor = a;
-        distribution = new UniformIntegerDistribution(0, a.getNumShards()-1);
+        if (a.getNumShards() > 1) {
+            distribution = new UniformIntegerDistribution(0, a.getNumShards()-1);
+        } else {
+            distribution = new UniformIntegerDistribution(0, 2) { //hack
+                    public int sample() {
+                        return 0;
+                    }
+                };
+        }
         stats = new BenchStats();
     }
 
