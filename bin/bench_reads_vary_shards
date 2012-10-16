@@ -1,0 +1,38 @@
+#!/bin/sh
+
+sudo -K
+sudo date
+
+LOGDIR=~/benchlogs.reads_vary_shards.$(date +%Y-%m-%d_%H%M)
+SCRIPT=~/src/bkvhbase/bin/bkvhbase
+mkdir $LOGDIR
+
+for i in 1 10 100 1000 10000; do
+    DIR=/d1/scratch/ivank/bk
+    rm -rf $DIR
+
+    LOG=$LOGDIR/bk.write_shard_$i
+    $SCRIPT bench -ledgerStorage -directory $DIR -rate 1000000 -shards $i -time 600 | tee $LOG
+
+    for r in 1 2 3; do
+	sudo sh -c "echo 1 > /proc/sys/vm/drop_caches"
+	LOG=$LOGDIR/bk.shard_$i.r$r
+	$SCRIPT bench -ledgerStorage -directory $DIR -time 120 -read 1 | tee $LOG
+    done
+done
+
+for i in 1 10 100 1000 10000; do
+    DIR=/d1/scratch/ivank/hregion
+    rm -rf $DIR
+
+    LOG=$LOGDIR/hregion.write_shard_$i
+    $SCRIPT bench -hregion -directory $DIR -rate 1000000 -shards $i -time 600 | tee $LOG
+
+    for r in 1 2 3; do
+	sudo sh -c "echo 1 > /proc/sys/vm/drop_caches"
+	LOG=$LOGDIR/hregion.shard_$i.r$r
+	$SCRIPT bench -hregion -directory $DIR -time 120 -read 1 | tee $LOG
+    done
+done
+
+

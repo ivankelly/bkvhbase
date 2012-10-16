@@ -1,0 +1,23 @@
+#!/bin/sh
+
+LOGDIR=~/benchlogs.writes.$(date +%Y-%m-%d_%H%M)
+SCRIPT=~/src/bkvhbase/bin/bkvhbase
+mkdir $LOGDIR
+
+for i in 1 10 100 1000 10000; do
+    for r in 1 2 3; do
+	DIR=/d1/scratch/ivank/bk
+	LOG=$LOGDIR/bk.shard_$i.r$r
+	rm -rf $DIR
+        $SCRIPT bench -ledgerStorage -directory $DIR -rate 1000000 -shards $i -time 300 | tee $LOG
+    done
+done
+
+for i in 1 10 100 1000 10000; do
+    for r in 1 2 3; do
+	DIR=/d1/scratch/ivank/hregion
+	LOG=$LOGDIR/hregion.shard_$i.r$r
+	rm -rf $DIR
+        $SCRIPT bench -hregion -directory $DIR -rate 1000000 -shards $i -time 300 | tee $LOG
+    done
+done
