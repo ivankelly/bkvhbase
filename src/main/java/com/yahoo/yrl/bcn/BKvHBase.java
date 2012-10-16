@@ -9,6 +9,10 @@ import org.apache.commons.cli.PosixParser;
 import org.apache.commons.cli.ParseException;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.util.Properties;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,8 +46,38 @@ public class BKvHBase {
         }
 
         int shards = 1;
-        if (cmd.hasOption("shards")) {
-            shards = Integer.valueOf(cmd.getOptionValue("shards"));
+        
+        if (!cmd.hasOption("directory")) {
+            LOG.error("Must specify a directory");
+            printHelp(options);
+            System.exit(-1);
+        }
+        File dir = new File(cmd.getOptionValue("directory"));
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        File metaFile = new File(dir, "META");
+        if (cmd.hasOption("read")) {
+            Properties p = new Properties();
+            FileInputStream i = new FileInputStream(metaFile);
+            p.load(i);
+            i.close();
+
+            shards = Integer.valueOf(p.getProperty("shards"));
+        } else {
+            if (metaFile.exists()) {
+                LOG.error("Meta file {} already exists, clean the directory before writing", metaFile);
+                System.exit(-1);
+            }
+            if (cmd.hasOption("shards")) {
+                shards = Integer.valueOf(cmd.getOptionValue("shards"));
+            }            
+            Properties p = new Properties();
+            p.setProperty("shards", String.valueOf(shards));
+            FileOutputStream o = new FileOutputStream(metaFile);
+            p.store(o, "benchmarking meta file");
+            o.close();
         }
 
         Adaptor adaptor = null;
