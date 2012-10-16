@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.hbase.regionserver.HRegionAdaptor;
+import org.apache.bookkeeper.bookie.LedgerStorageAdaptor;
 
 public class BKvHBase {
     static Logger LOG = LoggerFactory.getLogger(BKvHBase.class);
@@ -30,6 +31,7 @@ public class BKvHBase {
     public static void main(String[] args) throws Exception {
         Options options = new Options();
         options.addOption("hregion", false, "Benchmark hbase region storage");
+        options.addOption("ledgerStorage", false, "Benchmark BookKeeper LedgerStorage");
         options.addOption("time", true, "Time to run for, in seconds, default 60");
         options.addOption("rate", true, "Rate at which to write requests, default 1000");
         options.addOption("size", true, "Size of packets to use");
@@ -81,8 +83,11 @@ public class BKvHBase {
         }
 
         Adaptor adaptor = null;
-        if (cmd.hasOption("hregion") && cmd.hasOption("directory")) {
-            adaptor = new HRegionAdaptor(new File(cmd.getOptionValue("directory")), shards);
+        if (cmd.hasOption("hregion")) {
+            adaptor = new HRegionAdaptor(dir, shards,
+                                         !cmd.hasOption("read"));
+        } else if (cmd.hasOption("ledgerStorage")) {
+            adaptor = new LedgerStorageAdaptor(dir, shards);
         } else {
             printHelp(options);
             System.exit(-1);
