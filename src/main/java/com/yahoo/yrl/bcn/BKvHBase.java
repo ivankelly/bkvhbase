@@ -29,8 +29,9 @@ public class BKvHBase {
         options.addOption("time", true, "Time to run for, in seconds, default 60");
         options.addOption("rate", true, "Rate at which to write requests, default 1000");
         options.addOption("size", true, "Size of packets to use");
-        options.addOption("shards", true, "Number of shards to write to");
+        options.addOption("shards", true, "Number of shards to write to, default 1");
         options.addOption("directory", true, "Directory to write to");
+        options.addOption("read", true, "Run reads workload, reading n shards");
 
         CommandLineParser parser = new PosixParser();
         CommandLine cmd = parser.parse(options, args);
@@ -64,6 +65,12 @@ public class BKvHBase {
             b.setData(new byte[Integer.valueOf(cmd.getOptionValue("size"))]);
         }
 
-        b.run();
+
+        if (cmd.hasOption("read")) {
+            b.runReads(Integer.valueOf(cmd.getOptionValue("read")));
+        } else {
+            b.runWrites();
+        }
+        adaptor.shutdown();
     }
 }

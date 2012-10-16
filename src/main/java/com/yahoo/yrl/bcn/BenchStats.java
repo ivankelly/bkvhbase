@@ -12,6 +12,7 @@ import com.twitter.common.stats.Percentile;
 import com.twitter.common.stats.Ratio;
 import com.twitter.common.stats.Stats;
 import com.twitter.common.stats.Stat;
+import com.twitter.common.stats.SampledStat;
 import com.twitter.common.stats.RequestStats;
 import com.twitter.common.stats.MovingAverage;
 import com.twitter.common.application.ShutdownRegistry;
@@ -34,6 +35,9 @@ public class BenchStats {
     private AtomicLong addsTotalTime;
     private Ratio addsLatency;
 
+    private MovingAverage readTptAvg;
+    private AtomicLong readRequests;
+
     private TimeSeriesRepository sampler;
     private ShutdownRegistry.ShutdownRegistryImpl shutdown;
 
@@ -43,16 +47,28 @@ public class BenchStats {
         addsRequests = new AtomicLong(0);
         addsTotalTime = new AtomicLong(0);
 
+        readRequests = new AtomicLong(0);
+
+        Rate readTpt = Rate.of("read_tpt_requests", readRequests).withWindowSize(1).build();
+        readTptAvg = MovingAverage.of("read_tpt_avg", readTpt, 30);
+        Stats.export(readTptAvg);
+
         Rate addTpt = Rate.of("adds_num_requests", addsRequests).withWindowSize(1).build();
         addTptAvg = MovingAverage.of("add_tpt_avg", addTpt, 30);
-        addLatPercentiles = new Percentile<Long>("add_lat_perc", 20, new double[]{95, 99});
-
         Stats.export(addTptAvg);
+        addLatPercentiles = new Percentile<Long>("add_lat_perc", 20, new double[]{95, 99});
+        
         Stats.export(Ratio.of("adds_latency",
                               Rate.of("adds_total_time", addsTotalTime).withWindowSize(1).build(),
                               addTpt));
-
-
+        /*        SampledStat<Double> myStat = new SampledStat<Double>("Foobar", 0.0) {
+            public Double doSample() {
+                LOG.info("Sampling {}", readRequests.get());
+                return 1.0;
+            }
+        };
+        Stats.export(myStat);*/
+        
         shutdown = new ShutdownRegistry.ShutdownRegistryImpl();
         sampler = new TimeSeriesRepositoryImpl(Stats.STAT_REGISTRY,
                 Amount.of(1L, Time.SECONDS), Amount.of(1L, Time.HOURS));
@@ -69,8 +85,11 @@ public class BenchStats {
         addLatPercentiles.record((endNanos-startNanos)/1000);
     }
 
-    void logTimeSeries() {
-        LOG.info("Names: {}", sampler.getAvailableSeries());
+    void recordRead() {
+        readRequests.incrementAndGet();
+    }
+
+    void logWriteTimeSeries() {
         Iterator<Number> tpt = sampler.get("adds_num_requests").getSamples().iterator();
         Iterator<Number> lat99 = sampler.get("adds_latency").getSamples().iterator();
         int i = 0;
@@ -80,10 +99,28 @@ public class BenchStats {
         }
     }
 
-    void logAverages() {
+    void logWriteAverages() {
         LOG.info("Add TPT Avg (last 30 seconds): {}", addTptAvg.read());
         for (Map.Entry<Double, ? extends Stat> e : addLatPercentiles.getPercentiles().entrySet()) {
             LOG.info("Add {}th %ile: {}", e.getKey(), e.getValue().read());
         }
+    }
+
+    void logReadTimeSeries() {
+        TimeSeries ts = sampler.get("read_tpt_requests");
+        if (ts == null) {
+            LOG.info("Not enough information collected for time series");
+            return;
+        }
+        Iterator<Number> tpt = ts.getSamples().iterator();
+        int i = 0;
+
+        while (tpt.hasNext()) {
+            LOG.info("{} : {}", new Object[] { i++, tpt.next()} );
+        }
+    }
+
+    void logReadAverages() {
+        LOG.info("Read TPT Avg (last 30 seconds): {}", readTptAvg.read());
     }
 }

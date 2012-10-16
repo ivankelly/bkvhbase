@@ -10,6 +10,8 @@ import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Threads;
 import org.apache.hadoop.hbase.regionserver.metrics.RegionServerMetrics;
 
@@ -33,27 +35,30 @@ public class HRegionAdaptor implements Adaptor {
     final HRegionServer server;
     final byte[][] regionNames;
     final AtomicInteger[] regionIndices;
+    final HRegion[] regions;
     final Configuration conf;
     final static String FAMILY = "DATAFAM";
     final static String QUALIFIER = "DATA";
 
-    public HRegionAdaptor(File baseDirectory, int numRegions) throws Exception {
+    public HRegionAdaptor(File baseDirectory, int numRegions, boolean clearData) throws Exception {
         conf = HBaseConfiguration.create();
+        conf.setInt("hbase.regionserver.regionSplitLimit", numRegions);
         server = new HRegionServer(conf);
         initializeThreads();
 
         regionNames = new byte[numRegions][];
+        regions = new HRegion[numRegions];
         regionIndices = new AtomicInteger[numRegions];
 
         Configuration conf = new Configuration();
         for (int i = 0; i < numRegions; i++) {
             regionIndices[i] = new AtomicInteger(0);
-            HRegion r = initHRegion(conf, new File(baseDirectory, "region" + i),
+            regions[i] = initHRegion(conf, new File(baseDirectory, "region" + i),
                                     Bytes.toBytes("table"+i),
-                                    server,
+                                    server, clearData,
                                     Bytes.toBytes(FAMILY));
-            regionNames[i] = r.getRegionName();
-            server.addToOnlineRegions(r);
+            regionNames[i] = regions[i].getRegionName();
+            server.addToOnlineRegions(regions[i]);
         }
     }
 
@@ -96,18 +101,46 @@ public class HRegionAdaptor implements Adaptor {
         server.put(regionName, put);
     }
 
+    @Override
+    public void readEntries(int regionIndex, Reader r) throws IOException {
+        byte[] regionName = regionNames[regionIndex];
+
+        Scan s = new Scan();
+        s.addColumn(Bytes.toBytes(FAMILY), Bytes.toBytes(QUALIFIER));
+        long scanId = server.openScanner(regionName, s);
+        Result res = server.next(scanId);
+        while (res != null) {
+            r.entryRead(res.getValue(Bytes.toBytes(FAMILY), Bytes.toBytes(QUALIFIER)));
+            res = server.next(scanId);
+        }
+        r.done();
+    }
+    
+    @Override
+    public void start() throws IOException {
+    }
+
+    @Override
+    public void shutdown() throws IOException {
+        for (HRegion r : regions) {
+            r.close(false);
+        }
+    }
+
     private static HRegion initHRegion(Configuration conf, File directory, byte[] tableName,
-                                       RegionServerServices services,
+                                       RegionServerServices services, boolean clearData,
                                        byte[]... families) throws IOException {
         HTableDescriptor htd = new HTableDescriptor(tableName);
         for(byte [] family : families) {
             htd.addFamily(new HColumnDescriptor(family));
         }
 
-        HRegionInfo info = new HRegionInfo(htd.getName(), null/*startKey*/, null/*stopKey*/, false);
+        HRegionInfo info = new HRegionInfo(htd.getName(), null/*startKey*/, null/*stopKey*/,
+                false, (long)new String(tableName).hashCode());
+        LOG.info("HREgion info {} {}", info.getEncodedName(), htd.getName());
         Path path = new Path(directory.toURI());
         FileSystem fs = FileSystem.get(conf);
-        if (fs.exists(path)) {
+        if (fs.exists(path) && clearData) {
             if (!fs.delete(path, true)) {
                 throw new IOException("Failed delete of " + path);
             }
@@ -115,6 +148,7 @@ public class HRegionAdaptor implements Adaptor {
 
         HRegion r = new HRegion(path, null, fs, conf, info, htd, services);
         r.initialize();
+
         return r;
     }
 }
