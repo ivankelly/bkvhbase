@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.twitter.common.stats.MovingAverage;
+import com.twitter.common.stats.StatImpl;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,7 +23,13 @@ public class LedgerStorageAdaptor implements Adaptor {
     final LedgerStorage ls;
     final SyncThread syncThread;
     final AtomicLong[] ledgerIndices;
-
+    
+    // stats
+    final AtomicLong completedFlushes;
+    final AtomicLong lastFlushNanos;
+    final MovingAverage flushNanosAverage;
+    final AtomicLong entriesWritten;
+    final MovingAverage entriesPerFlush;
 
     public LedgerStorageAdaptor(File base, int numRegions) throws Exception {
         ServerConfiguration conf = new ServerConfiguration();
@@ -30,7 +39,9 @@ public class LedgerStorageAdaptor implements Adaptor {
             curDir.mkdirs();
         }
         
-        ls = new InterleavedLedgerStorage(conf, new DummyActiveLedgerManager());
+        ls = new InterleavedLedgerStorage(conf,
+                                          new DummyActiveLedgerManager(),
+                                          new LedgerDirsManager(conf));
 
         ledgerIndices = new AtomicLong[numRegions];
         for (int i = 0; i < numRegions; i++) {
@@ -42,6 +53,20 @@ public class LedgerStorageAdaptor implements Adaptor {
         }
         syncThread = new SyncThread(conf);
         syncThread.setDaemon(true);
+
+        completedFlushes = new AtomicLong(0);
+        lastFlushNanos = new AtomicLong(0);
+        flushNanosAverage = MovingAverage.of(new StatImpl<Long>("flush_avg") {
+                public Long read() {
+                    return lastFlushNanos.getAndSet(0);
+                }
+            });
+        entriesWritten = new AtomicLong(0);
+        entriesPerFlush = MovingAverage.of(new StatImpl<Long>("entries_per_flush") {
+                public Long read() {
+                    return entriesWritten.getAndSet(0);
+                }
+            });
     }
 
     public int getNumShards() {
@@ -56,6 +81,7 @@ public class LedgerStorageAdaptor implements Adaptor {
         b.flip();
 
         ls.addEntry(b);
+        entriesWritten.incrementAndGet();
     }
 
     public void readEntries(int shard, Reader r) throws IOException {
@@ -90,6 +116,25 @@ public class LedgerStorageAdaptor implements Adaptor {
             Thread.currentThread().interrupt();
             throw new IOException(ie);
         }
+    }
+
+    private void preFlush() {
+        entriesPerFlush.sample();
+    }
+
+    private void postFlush(long durationInNano) {
+        lastFlushNanos.set(durationInNano);
+        flushNanosAverage.sample();
+        completedFlushes.incrementAndGet();
+    }
+
+    @Override
+    public void logImplStats(Logger logger) {
+        logger.info("Number of flushes: {}", completedFlushes);
+        // avg entries per flush
+        logger.info("Avg entries per flush(last 10 flushes): {}", entriesPerFlush.read()); 
+        // avg flush time
+        logger.info("Avg flush time(last 10 flushes): {} us", flushNanosAverage.read().longValue()/1000);
     }
 
     class SyncThread extends Thread {
@@ -131,7 +176,11 @@ public class LedgerStorageAdaptor implements Adaptor {
                 }
 
                 try {
+                    long start = System.nanoTime();
+                    preFlush();
                     ls.flush();
+                    long end = System.nanoTime();
+                    postFlush(end-start);
                 } catch (IOException e) {
                     LOG.error("Exception flushing Ledger", e);
                 }

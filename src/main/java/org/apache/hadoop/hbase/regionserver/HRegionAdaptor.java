@@ -44,7 +44,6 @@ public class HRegionAdaptor implements Adaptor {
         conf = HBaseConfiguration.create();
         conf.setInt("hbase.regionserver.regionSplitLimit", numRegions);
         server = new HRegionServer(conf);
-        initializeThreads();
 
         regionNames = new byte[numRegions][];
         regions = new HRegion[numRegions];
@@ -118,7 +117,15 @@ public class HRegionAdaptor implements Adaptor {
     
     @Override
     public void start() throws IOException {
+        try {
+            initializeThreads();
+        } catch (Exception e) {
+            throw new IOException("Couldnt initialize threads", e);
+        }
     }
+
+    @Override
+    public void logImplStats(Logger logger) {}
 
     @Override
     public void shutdown() throws IOException {

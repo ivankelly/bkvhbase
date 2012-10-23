@@ -104,7 +104,7 @@ public class BKvHBase {
             b.setData(new byte[Integer.valueOf(cmd.getOptionValue("size"))]);
         }
 
-
+        adaptor.start();
         if (cmd.hasOption("read")) {
             b.runReads(Integer.valueOf(cmd.getOptionValue("read")));
         } else {

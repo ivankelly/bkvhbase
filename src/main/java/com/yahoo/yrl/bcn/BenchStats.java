@@ -2,6 +2,9 @@ package com.yahoo.yrl.bcn;
 
 import java.util.Map;
 import java.util.Iterator;
+
+import java.util.Set;
+import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.twitter.common.quantity.Amount;
@@ -14,7 +17,10 @@ import com.twitter.common.stats.Stats;
 import com.twitter.common.stats.Stat;
 import com.twitter.common.stats.SampledStat;
 import com.twitter.common.stats.RequestStats;
+import com.twitter.common.stats.StatRegistry;
+import com.twitter.common.stats.CustomStatRegistry;
 import com.twitter.common.stats.MovingAverage;
+
 import com.twitter.common.application.ShutdownRegistry;
 
 import com.twitter.common.stats.TimeSeries;
@@ -39,6 +45,7 @@ public class BenchStats {
     private AtomicLong readRequests;
 
     private TimeSeriesRepository sampler;
+    private CustomStatRegistry registry;
     private ShutdownRegistry.ShutdownRegistryImpl shutdown;
 
     BenchStats() {
@@ -49,18 +56,27 @@ public class BenchStats {
 
         readRequests = new AtomicLong(0);
 
+        final Set<SampledStat<? extends Number>> stats = new HashSet<SampledStat<? extends Number>>();
+        registry = new CustomStatRegistry(stats);
+
         Rate readTpt = Rate.of("read_tpt_requests", readRequests).withWindowSize(1).build();
         readTptAvg = MovingAverage.of("read_tpt_avg", readTpt, 30);
-        Stats.export(readTptAvg);
+        stats.add(readTpt);
+        stats.add(readTptAvg);
 
         Rate addTpt = Rate.of("adds_num_requests", addsRequests).withWindowSize(1).build();
         addTptAvg = MovingAverage.of("add_tpt_avg", addTpt, 30);
-        Stats.export(addTptAvg);
+        stats.add(addTpt);
+        stats.add(addTptAvg);
+
         addLatPercentiles = new Percentile<Long>("add_lat_perc", 20, new double[]{95, 99});
-        
-        Stats.export(Ratio.of("adds_latency",
-                              Rate.of("adds_total_time", addsTotalTime).withWindowSize(1).build(),
-                              addTpt));
+        registry.addPercentiles(addLatPercentiles);
+
+        Rate addsTotalTimeRate = Rate.of("adds_total_time", addsTotalTime).withWindowSize(1).build();
+        stats.add(addsTotalTimeRate);
+        stats.add(Ratio.of("adds_latency",
+                           addsTotalTimeRate,
+                           addTpt));
         /*        SampledStat<Double> myStat = new SampledStat<Double>("Foobar", 0.0) {
             public Double doSample() {
                 LOG.info("Sampling {}", readRequests.get());
@@ -70,7 +86,7 @@ public class BenchStats {
         Stats.export(myStat);*/
         
         shutdown = new ShutdownRegistry.ShutdownRegistryImpl();
-        sampler = new TimeSeriesRepositoryImpl(Stats.STAT_REGISTRY,
+        sampler = new TimeSeriesRepositoryImpl(registry,
                 Amount.of(1L, Time.SECONDS), Amount.of(1L, Time.HOURS));
         sampler.start(shutdown);
     }

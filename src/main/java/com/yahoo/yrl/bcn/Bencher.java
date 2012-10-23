@@ -115,6 +115,7 @@ class Bencher {
 
         stats.logReadTimeSeries();
         stats.logReadAverages();
+        adaptor.logImplStats(LOG);
         if (count > 0) {
             LOG.info("Avg read time per completed shard: {} ms", tot/count);
         }
@@ -146,5 +147,6 @@ class Bencher {
         }        
         stats.logWriteTimeSeries();
         stats.logWriteAverages();
+        adaptor.logImplStats(LOG);
     }
 }
