@@ -1,11 +1,11 @@
 #!/bin/sh
 
-echo -e "#shards_read\tbk\thregion"
+echo -e "#shards_read\tbk\tbkslabs"
 
 for i in 1 10 100 500 1000; do
     BK=$(cat bk.read_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
-    HREGION=$(cat hregion.read_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
-    echo -e "$i\t$BK\t$HREGION"
+    BKSLABS=$(cat bkslabs.read_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
+    echo -e "$i\t$BK\t$BKSLABS"
 done
 
 

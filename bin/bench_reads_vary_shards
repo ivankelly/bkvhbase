@@ -22,11 +22,11 @@ for i in 1 10 100 1000 10000; do
 done
 
 for i in 1 10 100 1000 10000; do
-    DIR=/d1/scratch/ivank/hregion
+    DIR=/d1/scratch/ivank/bk-slabs
     rm -rf $DIR
 
     LOG=$LOGDIR/hregion.write_shard_$i
-    $SCRIPT bench -hregion -directory $DIR -rate 1000000 -shards $i -time 600 | tee $LOG
+    $SCRIPT bench -slabStorage -directory $DIR -rate 1000000 -shards $i -time 600 | tee $LOG
 
     for r in 1 2 3; do
 	sudo sh -c "echo 1 > /proc/sys/vm/drop_caches"
