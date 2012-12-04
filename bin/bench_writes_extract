@@ -3,6 +3,8 @@
 echo -e "#shards\tbk\thregion"
 for i in 1 10 100 1000 10000; do
     BK=$(cat bk.shard_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
-    HREGION=$(cat hregion.shard_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
-    echo -e "$i\t$BK\t$HREGION"
+    BK_STDDEV=$(cat bk.shard_$i.r* | awk '/TPT Avg/ {sum+=$14; sumsq+=$14*$14} END { print sqrt(sumsq/NR - (sum/NR)**2)}')
+
+#    HREGION=$(cat hregion.shard_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
+    echo -e "$i\t$BK\t$BK_STDDEV"
 done

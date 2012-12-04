@@ -20,7 +20,7 @@ public class SlabStorageAdaptor implements Adaptor {
     static Logger LOG = LoggerFactory.getLogger(SlabStorageAdaptor.class);
 
     final byte[] COMMON_KEY = "COMMON_KEY".getBytes();
-    final LedgerStorage ls;
+    final MemSlabLedgerStorage ls;
     final SyncThread syncThread;
     final AtomicLong[] ledgerIndices;
     
@@ -104,6 +104,7 @@ public class SlabStorageAdaptor implements Adaptor {
 
     @Override
     public void start() throws IOException {
+        ls.startFlushThread();
         syncThread.start();
     }
 

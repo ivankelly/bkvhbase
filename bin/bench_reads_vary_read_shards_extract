@@ -4,8 +4,11 @@ echo -e "#shards_read\tbk\tbkslabs"
 
 for i in 1 10 100 500 1000; do
     BK=$(cat bk.read_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
+    BK_STDDEV=$(cat bk.read_$i.r* | awk '/TPT Avg/ {sum+=$14; sumsq+=$14*$14} END { print sqrt(sumsq/NR - (sum/NR)**2)}')
+
     BKSLABS=$(cat bkslabs.read_$i.r* | awk '/TPT Avg/ {SUM+=$14; COUNT++} END { print SUM/COUNT }')
-    echo -e "$i\t$BK\t$BKSLABS"
+    BKSLABS_STDDEV=$(cat bkslabs.read_$i.r* | awk '/TPT Avg/ {sum+=$14; sumsq+=$14*$14} END { print sqrt(sumsq/NR - (sum/NR)**2)}')
+    echo -e "$i\t$BK\t$BK_STDDEV\t$BKSLABS\t$BKSLABS_STDDEV"
 done
 
 
